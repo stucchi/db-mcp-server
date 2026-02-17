@@ -11,7 +11,7 @@ async def execute_mysql(conn: Connection, config: Config, sql: str) -> dict:
             "Write operations are not allowed."
         )
 
-    async with conn.pool.acquire() as c:
+    async with conn.acquire_mysql() as c:
         async with c.cursor() as cur:
             await cur.execute(sql)
             return {

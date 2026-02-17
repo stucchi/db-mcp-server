@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import struct
 import sys
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 import aiomysql
 import motor.motor_asyncio
+from pymysql.constants import COMMAND
 
 from db_mcp.config import Config
+
+# MySQL COM_SET_OPTION argument to turn off multi-statement support.
+_MULTI_STATEMENTS_OFF = struct.pack("<H", 1)
 
 
 class Connection:
@@ -15,6 +21,8 @@ class Connection:
         self._pool: aiomysql.Pool | None = None
         self._mongo_client: motor.motor_asyncio.AsyncIOMotorClient | None = None
         self._mongo_db: Any = None
+        # Track connections where multi-statements have been disabled.
+        self._safe_conns: set[int] = set()
 
     @property
     def pool(self) -> aiomysql.Pool:
@@ -32,6 +40,34 @@ class Connection:
         else:
             await self._connect_mongodb()
 
+    # ------------------------------------------------------------------
+    # MySQL helpers
+    # ------------------------------------------------------------------
+
+    async def _disable_multi_statements(self, conn: aiomysql.Connection) -> None:
+        """Disable multi-statement query support on *conn*.
+
+        aiomysql unconditionally sets CLIENT_MULTI_STATEMENTS during the
+        handshake.  We send COM_SET_OPTION(MYSQL_OPTION_MULTI_STATEMENTS_OFF)
+        to instruct the server to reject any query containing multiple
+        statements, closing the protocol-level loophole.
+        """
+        conn_id = id(conn)
+        if conn_id in self._safe_conns:
+            return
+        await conn._execute_command(COMMAND.COM_SET_OPTION, _MULTI_STATEMENTS_OFF)
+        pkt = await conn._read_packet()
+        if not pkt.is_ok_packet() and not pkt.is_eof_packet():
+            raise RuntimeError("Failed to disable multi-statement queries")
+        self._safe_conns.add(conn_id)
+
+    @asynccontextmanager
+    async def acquire_mysql(self) -> AsyncIterator[aiomysql.Connection]:
+        """Acquire a MySQL connection with multi-statements disabled."""
+        async with self.pool.acquire() as conn:
+            await self._disable_multi_statements(conn)
+            yield conn
+
     async def _connect_mysql(self) -> None:
         print(
             f"[db-mcp] Connecting to MySQL {self.config.db_host}:{self.config.db_port}"
@@ -46,8 +82,8 @@ class Connection:
             db=self.config.db_database,
             autocommit=True,
         )
-        # Verify connectivity
-        async with self._pool.acquire() as conn:
+        # Verify connectivity and disable multi-statement support.
+        async with self.acquire_mysql() as conn:
             await conn.ping()
         print("[db-mcp] MySQL connected.", file=sys.stderr)
 

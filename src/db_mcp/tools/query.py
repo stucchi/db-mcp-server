@@ -13,7 +13,7 @@ async def query_mysql(conn: Connection, config: Config, sql: str) -> list[dict]:
     if config.is_read_only:
         validate_read_only_query(sql)
 
-    async with conn.pool.acquire() as c:
+    async with conn.acquire_mysql() as c:
         async with c.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(sql)
             rows = await cur.fetchall()
