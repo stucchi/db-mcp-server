@@ -95,3 +95,5 @@ For multiple databases, add multiple instances:
 ## License
 
 MIT
+
+<!-- mcp-name: io.github.stucchi/db -->
