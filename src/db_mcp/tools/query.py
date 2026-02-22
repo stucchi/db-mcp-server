@@ -20,6 +20,15 @@ async def query_mysql(conn: Connection, config: Config, sql: str) -> list[dict]:
     return rows
 
 
+async def query_pg(conn: Connection, config: Config, sql: str) -> list[dict]:
+    if config.is_read_only:
+        validate_read_only_query(sql)
+
+    async with conn.acquire_pg() as c:
+        rows = await c.fetch(sql)
+        return [dict(r) for r in rows]
+
+
 async def query_mongodb(
     conn: Connection,
     collection: str,

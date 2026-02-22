@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import aiomysql
+import asyncpg
 import motor.motor_asyncio
 from pymysql.constants import COMMAND
 
@@ -19,6 +20,7 @@ class Connection:
     def __init__(self, config: Config) -> None:
         self.config = config
         self._pool: aiomysql.Pool | None = None
+        self._pg_pool: asyncpg.Pool | None = None
         self._mongo_client: motor.motor_asyncio.AsyncIOMotorClient | None = None
         self._mongo_db: Any = None
         # Track connections where multi-statements have been disabled.
@@ -30,6 +32,11 @@ class Connection:
         return self._pool
 
     @property
+    def pg_pool(self) -> asyncpg.Pool:
+        assert self._pg_pool is not None, "PostgreSQL pool not initialized"
+        return self._pg_pool
+
+    @property
     def db(self) -> Any:
         assert self._mongo_db is not None, "MongoDB database not initialized"
         return self._mongo_db
@@ -37,6 +44,8 @@ class Connection:
     async def connect(self) -> None:
         if self.config.is_mysql:
             await self._connect_mysql()
+        elif self.config.is_postgresql:
+            await self._connect_postgresql()
         else:
             await self._connect_mongodb()
 
@@ -87,6 +96,38 @@ class Connection:
             await conn.ping()
         print("[db-mcp] MySQL connected.", file=sys.stderr)
 
+    # ------------------------------------------------------------------
+    # PostgreSQL helpers
+    # ------------------------------------------------------------------
+
+    @asynccontextmanager
+    async def acquire_pg(self) -> AsyncIterator[asyncpg.Connection]:
+        """Acquire a PostgreSQL connection from the pool."""
+        async with self.pg_pool.acquire() as conn:
+            yield conn
+
+    async def _connect_postgresql(self) -> None:
+        print(
+            f"[db-mcp] Connecting to PostgreSQL {self.config.db_host}:{self.config.db_port}"
+            f"/{self.config.db_database} ({self.config.db_mode})...",
+            file=sys.stderr,
+        )
+        self._pg_pool = await asyncpg.create_pool(
+            host=self.config.db_host,
+            port=self.config.db_port,
+            user=self.config.db_user,
+            password=self.config.db_password,
+            database=self.config.db_database,
+        )
+        # Verify connectivity
+        async with self.acquire_pg() as conn:
+            await conn.fetchval("SELECT 1")
+        print("[db-mcp] PostgreSQL connected.", file=sys.stderr)
+
+    # ------------------------------------------------------------------
+    # MongoDB helpers
+    # ------------------------------------------------------------------
+
     async def _connect_mongodb(self) -> None:
         print(
             f"[db-mcp] Connecting to MongoDB {self.config.db_database} "
@@ -104,6 +145,9 @@ class Connection:
             self._pool.close()
             await self._pool.wait_closed()
             print("[db-mcp] MySQL disconnected.", file=sys.stderr)
+        if self._pg_pool is not None:
+            await self._pg_pool.close()
+            print("[db-mcp] PostgreSQL disconnected.", file=sys.stderr)
         if self._mongo_client is not None:
             self._mongo_client.close()
             print("[db-mcp] MongoDB disconnected.", file=sys.stderr)

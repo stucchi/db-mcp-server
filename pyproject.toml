@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "db-mcp-server"
-version = "1.0.5"
-description = "MCP server for MySQL and MongoDB databases — one instance per database, no Docker required"
+version = "1.0.6"
+description = "MCP server for MySQL, PostgreSQL, and MongoDB databases — one instance per database, no Docker required"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
     { name = "Ing. Luca Stucchi" },
 ]
-keywords = ["mcp", "database", "mysql", "mongodb", "ai"]
+keywords = ["mcp", "database", "mysql", "postgresql", "mongodb", "ai"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "mcp[cli]",
     "aiomysql",
+    "asyncpg",
     "motor",
 ]
 

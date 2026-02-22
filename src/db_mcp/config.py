@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    db_type: str  # "mysql" or "mongodb"
+    db_type: str  # "mysql", "postgresql", or "mongodb"
     db_mode: str  # "read-only" or "read-write"
     db_database: str
 
-    # MySQL
+    # MySQL / PostgreSQL
     db_host: str
     db_port: int
     db_user: str
@@ -22,6 +22,10 @@ class Config:
     @property
     def is_mysql(self) -> bool:
         return self.db_type == "mysql"
+
+    @property
+    def is_postgresql(self) -> bool:
+        return self.db_type == "postgresql"
 
     @property
     def is_mongodb(self) -> bool:
@@ -39,9 +43,9 @@ class Config:
 
         missing: list[str] = []
 
-        if db_type not in ("mysql", "mongodb"):
+        if db_type not in ("mysql", "postgresql", "mongodb"):
             raise RuntimeError(
-                "DB_TYPE must be 'mysql' or 'mongodb'.\n"
+                "DB_TYPE must be 'mysql', 'postgresql', or 'mongodb'.\n"
                 "Set DB_TYPE in your environment variables."
             )
 
@@ -54,14 +58,16 @@ class Config:
                 f"Got: '{db_mode}'"
             )
 
-        # MySQL-specific
+        # MySQL / PostgreSQL connection vars
         db_host = os.environ.get("DB_HOST", "localhost")
-        db_port = int(os.environ.get("DB_PORT", "3306"))
-        db_user = os.environ.get("DB_USER", "root")
+        default_port = "5432" if db_type == "postgresql" else "3306"
+        db_port = int(os.environ.get("DB_PORT", default_port))
+        default_user = "postgres" if db_type == "postgresql" else "root"
+        db_user = os.environ.get("DB_USER", default_user)
         db_password = os.environ.get("DB_PASSWORD", "")
         db_url = os.environ.get("DB_URL", "")
 
-        if db_type == "mysql" and not db_password:
+        if db_type in ("mysql", "postgresql") and not db_password:
             missing.append("DB_PASSWORD")
 
         if db_type == "mongodb" and not db_url:
@@ -71,6 +77,7 @@ class Config:
             raise RuntimeError(
                 f"Missing required environment variables: {', '.join(missing)}.\n"
                 "MySQL requires: DB_TYPE, DB_DATABASE, DB_PASSWORD\n"
+                "PostgreSQL requires: DB_TYPE, DB_DATABASE, DB_PASSWORD\n"
                 "MongoDB requires: DB_TYPE, DB_DATABASE, DB_URL"
             )
 

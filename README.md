@@ -1,6 +1,6 @@
 # db-mcp-server
 
-MCP server for MySQL and MongoDB databases. One instance per database, no Docker required.
+MCP server for MySQL, PostgreSQL, and MongoDB databases. One instance per database, no Docker required.
 
 ## Installation
 
@@ -22,6 +22,18 @@ Configure via environment variables. Each instance connects to a single database
 | `DB_HOST` | No | `localhost` | Host |
 | `DB_PORT` | No | `3306` | Port |
 | `DB_USER` | No | `root` | User |
+| `DB_MODE` | No | `read-only` | `read-only` or `read-write` |
+
+### PostgreSQL
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DB_TYPE` | Yes | — | `postgresql` |
+| `DB_DATABASE` | Yes | — | Database name |
+| `DB_PASSWORD` | Yes | — | Password |
+| `DB_HOST` | No | `localhost` | Host |
+| `DB_PORT` | No | `5432` | Port |
+| `DB_USER` | No | `postgres` | User |
 | `DB_MODE` | No | `read-only` | `read-only` or `read-write` |
 
 ### MongoDB
@@ -65,6 +77,11 @@ For multiple databases, add multiple instances:
       "args": ["db-mcp-server"],
       "env": { "DB_TYPE": "mysql", "DB_DATABASE": "prod", "..." : "..." }
     },
+    "db-analytics": {
+      "command": "uvx",
+      "args": ["db-mcp-server"],
+      "env": { "DB_TYPE": "postgresql", "DB_DATABASE": "analytics", "..." : "..." }
+    },
     "db-staging": {
       "command": "uvx",
       "args": ["db-mcp-server"],
@@ -82,6 +99,14 @@ For multiple databases, add multiple instances:
 - **execute** — Execute write SQL (INSERT, UPDATE, DELETE) — requires `DB_MODE=read-write`
 - **describe** — Describe table structure
 - **list_tables** — List all tables
+- **status** — Show connection info
+
+### PostgreSQL
+
+- **query** — Execute read-only SQL (SELECT, SHOW, DESCRIBE, EXPLAIN, WITH)
+- **execute** — Execute write SQL (INSERT, UPDATE, DELETE) — requires `DB_MODE=read-write`
+- **describe** — Describe table structure (column info from information_schema)
+- **list_tables** — List all tables in the public schema
 - **status** — Show connection info
 
 ### MongoDB

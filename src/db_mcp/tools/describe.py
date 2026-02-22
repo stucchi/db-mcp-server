@@ -14,6 +14,19 @@ async def describe_mysql(conn: Connection, table: str) -> list[dict]:
             return await cur.fetchall()
 
 
+async def describe_pg(conn: Connection, table: str) -> list[dict]:
+    safe_name = sanitize_table_name(table)
+    async with conn.acquire_pg() as c:
+        rows = await c.fetch(
+            "SELECT column_name, data_type, is_nullable, column_default "
+            "FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = $1 "
+            "ORDER BY ordinal_position",
+            safe_name,
+        )
+        return [dict(r) for r in rows]
+
+
 async def describe_mongodb(conn: Connection, collection: str) -> list[dict]:
     safe_name = sanitize_table_name(collection)
     cursor = conn.db[safe_name].aggregate([{"$collStats": {"storageStats": {}}}])

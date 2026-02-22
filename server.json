@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.stucchi/db",
   "title": "DB MCP Server",
-  "description": "MCP server for MySQL and MongoDB databases. One instance per database, no Docker required.",
+  "description": "MCP server for MySQL, PostgreSQL, and MongoDB databases. One instance per database, no Docker required.",
   "repository": {
     "url": "https://github.com/stucchi/db-mcp-server",
     "source": "github"
   },
-  "version": "1.0.5",
+  "version": "1.0.6",
   "icons": [
     {
       "src": "https://raw.githubusercontent.com/stucchi/db-mcp-server/master/assets/icon.png",
@@ -19,7 +19,7 @@
     {
       "registryType": "pypi",
       "identifier": "db-mcp-server",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "transport": {
         "type": "stdio"
       }

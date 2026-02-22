@@ -10,7 +10,7 @@ def get_status(config: Config) -> dict:
         "mode": config.db_mode,
         "status": "connected",
     }
-    if config.is_mysql:
+    if config.is_mysql or config.is_postgresql:
         info["host"] = f"{config.db_host}:{config.db_port}"
         info["user"] = config.db_user
     else:

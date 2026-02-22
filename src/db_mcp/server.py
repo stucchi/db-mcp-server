@@ -10,11 +10,11 @@ from mcp.server.fastmcp import FastMCP
 from db_mcp.config import get_config
 from db_mcp.connection import Connection
 from db_mcp.tools.aggregate import aggregate_mongodb
-from db_mcp.tools.describe import describe_mongodb, describe_mysql
-from db_mcp.tools.execute import execute_mysql
+from db_mcp.tools.describe import describe_mongodb, describe_mysql, describe_pg
+from db_mcp.tools.execute import execute_mysql, execute_pg
 from db_mcp.tools.list_collections import list_collections as _list_collections
-from db_mcp.tools.list_tables import list_tables as _list_tables
-from db_mcp.tools.query import query_mongodb, query_mysql
+from db_mcp.tools.list_tables import list_tables as _list_tables, list_tables_pg as _list_tables_pg
+from db_mcp.tools.query import query_mongodb, query_mysql, query_pg
 from db_mcp.tools.status import get_status
 
 config = get_config()
@@ -52,6 +52,16 @@ if config.is_mysql:
         rows = await query_mysql(_conn, config, query)
         return _format(rows)
 
+elif config.is_postgresql:
+
+    @mcp.tool()
+    async def query(
+        query: Annotated[str, "SQL SELECT query to execute"],
+    ) -> str:
+        """Execute a read-only query on the PostgreSQL database. Only SELECT, SHOW, DESCRIBE, EXPLAIN, WITH are allowed on read-only databases."""
+        rows = await query_pg(_conn, config, query)
+        return _format(rows)
+
 else:
 
     @mcp.tool()
@@ -65,7 +75,7 @@ else:
         return _format(rows)
 
 
-# --- Tool: execute (MySQL only) ---
+# --- Tool: execute (MySQL / PostgreSQL only) ---
 
 if config.is_mysql:
 
@@ -75,6 +85,16 @@ if config.is_mysql:
     ) -> str:
         """Execute a write query on the MySQL database. Only works if the database is configured with mode='read-write'."""
         result = await execute_mysql(_conn, config, query)
+        return _format(result)
+
+elif config.is_postgresql:
+
+    @mcp.tool()
+    async def execute(
+        query: Annotated[str, "SQL query to execute (INSERT, UPDATE, DELETE, etc.)"],
+    ) -> str:
+        """Execute a write query on the PostgreSQL database. Only works if the database is configured with mode='read-write'."""
+        result = await execute_pg(_conn, config, query)
         return _format(result)
 
 
@@ -90,6 +110,16 @@ if config.is_mysql:
         rows = await describe_mysql(_conn, table)
         return _format(rows)
 
+elif config.is_postgresql:
+
+    @mcp.tool()
+    async def describe(
+        table: Annotated[str, "Table name to describe"],
+    ) -> str:
+        """Describe the structure of a PostgreSQL table (column info from information_schema)."""
+        rows = await describe_pg(_conn, table)
+        return _format(rows)
+
 else:
 
     @mcp.tool()
@@ -101,7 +131,7 @@ else:
         return _format(rows)
 
 
-# --- Tool: list_tables (MySQL only) ---
+# --- Tool: list_tables (MySQL / PostgreSQL) ---
 
 if config.is_mysql:
 
@@ -109,6 +139,14 @@ if config.is_mysql:
     async def list_tables() -> str:
         """List all tables in the MySQL database."""
         rows = await _list_tables(_conn)
+        return _format(rows)
+
+elif config.is_postgresql:
+
+    @mcp.tool()
+    async def list_tables() -> str:
+        """List all tables in the PostgreSQL database (public schema)."""
+        rows = await _list_tables_pg(_conn)
         return _format(rows)
 
 
