@@ -8,6 +8,13 @@
     "source": "github"
   },
   "version": "1.0.2",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/stucchi/db-mcp-server/main/assets/icon.png",
+      "mimeType": "image/png",
+      "sizes": ["1024x1024"]
+    }
+  ],
   "packages": [
     {
       "registryType": "pypi",
