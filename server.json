@@ -7,7 +7,7 @@
     "url": "https://github.com/stucchi/db-mcp-server",
     "source": "github"
   },
-  "version": "1.0.2",
+  "version": "1.0.3",
   "icons": [
     {
       "src": "https://raw.githubusercontent.com/stucchi/db-mcp-server/main/assets/icon.png",
@@ -19,7 +19,7 @@
     {
       "registryType": "pypi",
       "identifier": "db-mcp-server",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "transport": {
         "type": "stdio"
       }
