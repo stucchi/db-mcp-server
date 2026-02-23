@@ -7,7 +7,7 @@
     "url": "https://github.com/stucchi/db-mcp-server",
     "source": "github"
   },
-  "version": "1.0.7",
+  "version": "1.0.8",
   "icons": [
     {
       "src": "https://raw.githubusercontent.com/stucchi/db-mcp-server/master/assets/icon.png",
@@ -19,10 +19,77 @@
     {
       "registryType": "pypi",
       "identifier": "db-mcp-server",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "environmentVariables": [
+        {
+          "name": "DB_TYPE",
+          "description": "Database type",
+          "isRequired": true,
+          "choices": ["mysql", "postgresql", "mongodb"]
+        },
+        {
+          "name": "DB_DATABASE",
+          "description": "Database name",
+          "isRequired": true
+        },
+        {
+          "name": "DB_MODE",
+          "description": "Access mode",
+          "default": "read-only",
+          "choices": ["read-only", "read-write"]
+        },
+        {
+          "name": "DB_HOST",
+          "description": "Database host (MySQL/PostgreSQL)",
+          "default": "localhost"
+        },
+        {
+          "name": "DB_PORT",
+          "description": "Database port (MySQL: 3306, PostgreSQL: 5432)",
+          "format": "number"
+        },
+        {
+          "name": "DB_USER",
+          "description": "Database user (MySQL default: root, PostgreSQL default: postgres)"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "description": "Database password (required for MySQL/PostgreSQL)",
+          "isSecret": true
+        },
+        {
+          "name": "DB_URL",
+          "description": "MongoDB connection URL (required for MongoDB, e.g. mongodb://...)",
+          "isSecret": true
+        },
+        {
+          "name": "SSH_HOST",
+          "description": "SSH bastion host for tunneling (MySQL/PostgreSQL only)"
+        },
+        {
+          "name": "SSH_PORT",
+          "description": "SSH port",
+          "default": "22",
+          "format": "number"
+        },
+        {
+          "name": "SSH_USER",
+          "description": "SSH username (default: current OS user)"
+        },
+        {
+          "name": "SSH_KEY",
+          "description": "Path to SSH private key (e.g. ~/.ssh/id_rsa)",
+          "format": "filepath"
+        },
+        {
+          "name": "SSH_PASSWORD",
+          "description": "SSH password (if no key provided)",
+          "isSecret": true
+        }
+      ]
     }
   ]
 }
