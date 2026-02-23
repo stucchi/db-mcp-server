@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import getpass
 import os
 from dataclasses import dataclass
 
@@ -19,6 +20,13 @@ class Config:
     # MongoDB
     db_url: str
 
+    # SSH tunnel (MySQL / PostgreSQL only)
+    ssh_host: str
+    ssh_port: int
+    ssh_user: str
+    ssh_key: str
+    ssh_password: str
+
     @property
     def is_mysql(self) -> bool:
         return self.db_type == "mysql"
@@ -34,6 +42,10 @@ class Config:
     @property
     def is_read_only(self) -> bool:
         return self.db_mode == "read-only"
+
+    @property
+    def has_ssh_tunnel(self) -> bool:
+        return bool(self.ssh_host)
 
     @staticmethod
     def from_env() -> Config:
@@ -73,6 +85,26 @@ class Config:
         if db_type == "mongodb" and not db_url:
             missing.append("DB_URL")
 
+        # SSH tunnel vars
+        ssh_host = os.environ.get("SSH_HOST", "")
+        ssh_port = int(os.environ.get("SSH_PORT", "22"))
+        ssh_user = os.environ.get("SSH_USER", getpass.getuser())
+        ssh_key = os.environ.get("SSH_KEY", "")
+        ssh_password = os.environ.get("SSH_PASSWORD", "")
+
+        if ssh_host:
+            if db_type == "mongodb":
+                raise RuntimeError(
+                    "SSH tunneling is not supported for MongoDB.\n"
+                    "MongoDB uses DB_URL which may contain replica set routing or SRV records.\n"
+                    "Please manage the SSH tunnel externally for MongoDB connections."
+                )
+            if not ssh_key and not ssh_password:
+                raise RuntimeError(
+                    "SSH_HOST is set but no authentication provided.\n"
+                    "Set SSH_KEY (path to private key) or SSH_PASSWORD."
+                )
+
         if missing:
             raise RuntimeError(
                 f"Missing required environment variables: {', '.join(missing)}.\n"
@@ -90,6 +122,11 @@ class Config:
             db_user=db_user,
             db_password=db_password,
             db_url=db_url,
+            ssh_host=ssh_host,
+            ssh_port=ssh_port,
+            ssh_user=ssh_user,
+            ssh_key=ssh_key,
+            ssh_password=ssh_password,
         )
 
 

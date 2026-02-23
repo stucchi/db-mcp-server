@@ -45,6 +45,20 @@ Configure via environment variables. Each instance connects to a single database
 | `DB_URL` | Yes | — | Connection URL (`mongodb://...`) |
 | `DB_MODE` | No | `read-only` | `read-only` or `read-write` |
 
+### SSH Tunnel (MySQL / PostgreSQL)
+
+Optionally connect through an SSH bastion host. Set `SSH_HOST` to activate.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SSH_HOST` | No | — | SSH bastion host (activates tunneling) |
+| `SSH_PORT` | No | `22` | SSH port |
+| `SSH_USER` | No | Current OS user | SSH username |
+| `SSH_KEY` | No | — | Path to private key (`~/.ssh/id_rsa`) |
+| `SSH_PASSWORD` | No | — | SSH password (if no key) |
+
+At least one of `SSH_KEY` or `SSH_PASSWORD` is required when `SSH_HOST` is set. SSH tunneling is not supported for MongoDB.
+
 ## Usage in .mcp.json
 
 ```json
@@ -61,6 +75,30 @@ Configure via environment variables. Each instance connects to a single database
         "DB_USER": "root",
         "DB_PASSWORD": "secret",
         "DB_DATABASE": "myapp"
+      }
+    }
+  }
+}
+```
+
+### With SSH tunnel
+
+```json
+{
+  "mcpServers": {
+    "db-behind-bastion": {
+      "command": "uvx",
+      "args": ["db-mcp-server"],
+      "env": {
+        "DB_TYPE": "postgresql",
+        "DB_HOST": "10.0.0.5",
+        "DB_PORT": "5432",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "secret",
+        "DB_DATABASE": "myapp",
+        "SSH_HOST": "bastion.example.com",
+        "SSH_USER": "deploy",
+        "SSH_KEY": "~/.ssh/id_rsa"
       }
     }
   }

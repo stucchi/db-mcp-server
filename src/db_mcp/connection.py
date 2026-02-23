@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import struct
 import sys
 from contextlib import asynccontextmanager
@@ -9,6 +10,7 @@ import aiomysql
 import asyncpg
 import motor.motor_asyncio
 from pymysql.constants import COMMAND
+from sshtunnel import SSHTunnelForwarder
 
 from db_mcp.config import Config
 
@@ -23,6 +25,7 @@ class Connection:
         self._pg_pool: asyncpg.Pool | None = None
         self._mongo_client: motor.motor_asyncio.AsyncIOMotorClient | None = None
         self._mongo_db: Any = None
+        self._tunnel: SSHTunnelForwarder | None = None
         # Track connections where multi-statements have been disabled.
         self._safe_conns: set[int] = set()
 
@@ -41,11 +44,48 @@ class Connection:
         assert self._mongo_db is not None, "MongoDB database not initialized"
         return self._mongo_db
 
+    def _start_tunnel(self) -> tuple[str, int]:
+        """Open an SSH tunnel and return (local_host, local_port)."""
+        cfg = self.config
+        kwargs: dict[str, Any] = {
+            "ssh_username": cfg.ssh_user,
+            "remote_bind_address": (cfg.db_host, cfg.db_port),
+            "local_bind_address": ("127.0.0.1", 0),
+        }
+        if cfg.ssh_key:
+            kwargs["ssh_pkey"] = os.path.expanduser(cfg.ssh_key)
+        if cfg.ssh_password:
+            kwargs["ssh_password"] = cfg.ssh_password
+
+        print(
+            f"[db-mcp] Opening SSH tunnel via {cfg.ssh_user}@{cfg.ssh_host}:{cfg.ssh_port}"
+            f" -> {cfg.db_host}:{cfg.db_port}...",
+            file=sys.stderr,
+        )
+        self._tunnel = SSHTunnelForwarder(
+            (cfg.ssh_host, cfg.ssh_port),
+            **kwargs,
+        )
+        self._tunnel.start()
+        local_host = "127.0.0.1"
+        local_port = self._tunnel.local_bind_port
+        print(
+            f"[db-mcp] SSH tunnel established on {local_host}:{local_port}.",
+            file=sys.stderr,
+        )
+        return local_host, local_port
+
     async def connect(self) -> None:
+        host = self.config.db_host
+        port = self.config.db_port
+
+        if self.config.has_ssh_tunnel:
+            host, port = self._start_tunnel()
+
         if self.config.is_mysql:
-            await self._connect_mysql()
+            await self._connect_mysql(host, port)
         elif self.config.is_postgresql:
-            await self._connect_postgresql()
+            await self._connect_postgresql(host, port)
         else:
             await self._connect_mongodb()
 
@@ -77,15 +117,15 @@ class Connection:
             await self._disable_multi_statements(conn)
             yield conn
 
-    async def _connect_mysql(self) -> None:
+    async def _connect_mysql(self, host: str, port: int) -> None:
         print(
-            f"[db-mcp] Connecting to MySQL {self.config.db_host}:{self.config.db_port}"
+            f"[db-mcp] Connecting to MySQL {host}:{port}"
             f"/{self.config.db_database} ({self.config.db_mode})...",
             file=sys.stderr,
         )
         self._pool = await aiomysql.create_pool(
-            host=self.config.db_host,
-            port=self.config.db_port,
+            host=host,
+            port=port,
             user=self.config.db_user,
             password=self.config.db_password,
             db=self.config.db_database,
@@ -106,15 +146,15 @@ class Connection:
         async with self.pg_pool.acquire() as conn:
             yield conn
 
-    async def _connect_postgresql(self) -> None:
+    async def _connect_postgresql(self, host: str, port: int) -> None:
         print(
-            f"[db-mcp] Connecting to PostgreSQL {self.config.db_host}:{self.config.db_port}"
+            f"[db-mcp] Connecting to PostgreSQL {host}:{port}"
             f"/{self.config.db_database} ({self.config.db_mode})...",
             file=sys.stderr,
         )
         self._pg_pool = await asyncpg.create_pool(
-            host=self.config.db_host,
-            port=self.config.db_port,
+            host=host,
+            port=port,
             user=self.config.db_user,
             password=self.config.db_password,
             database=self.config.db_database,
@@ -151,3 +191,6 @@ class Connection:
         if self._mongo_client is not None:
             self._mongo_client.close()
             print("[db-mcp] MongoDB disconnected.", file=sys.stderr)
+        if self._tunnel is not None:
+            self._tunnel.stop()
+            print("[db-mcp] SSH tunnel closed.", file=sys.stderr)
