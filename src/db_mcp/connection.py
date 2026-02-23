@@ -6,10 +6,25 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
+import paramiko
 import aiomysql
 import asyncpg
 import motor.motor_asyncio
 from pymysql.constants import COMMAND
+
+# Compatibility shim: paramiko >=4 removed DSSKey (DSA is deprecated).
+# sshtunnel 0.4.0 still references it, so we provide a stub to prevent crashes.
+if not hasattr(paramiko, "DSSKey"):
+
+    class _DSSKeyStub:
+        """Stub that makes sshtunnel skip DSA keys gracefully."""
+
+        @classmethod
+        def from_private_key_file(cls, *a: Any, **kw: Any) -> None:
+            raise paramiko.SSHException("DSA keys not supported")
+
+    paramiko.DSSKey = _DSSKeyStub  # type: ignore[attr-defined]
+
 from sshtunnel import SSHTunnelForwarder
 
 from db_mcp.config import Config
