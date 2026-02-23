@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "db-mcp-server"
-version = "1.0.8"
+version = "1.0.9"
 description = "MCP server for MySQL, PostgreSQL, and MongoDB databases — one instance per database, no Docker required"
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,7 @@ dependencies = [
     "asyncpg",
     "motor",
     "sshtunnel",
+    "paramiko<3",
 ]
 
 [project.urls]
