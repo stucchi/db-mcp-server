@@ -129,6 +129,8 @@ class Connection:
     async def acquire_mysql(self) -> AsyncIterator[aiomysql.Connection]:
         """Acquire a MySQL connection with multi-statements disabled."""
         async with self.pool.acquire() as conn:
+            self._safe_conns.discard(id(conn))
+            await conn.ping(reconnect=True)
             await self._disable_multi_statements(conn)
             yield conn
 
