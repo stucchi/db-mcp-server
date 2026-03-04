@@ -79,9 +79,6 @@ class Config:
         db_password = os.environ.get("DB_PASSWORD", "")
         db_url = os.environ.get("DB_URL", "")
 
-        if db_type in ("mysql", "postgresql") and not db_password:
-            missing.append("DB_PASSWORD")
-
         if db_type == "mongodb" and not db_url:
             missing.append("DB_URL")
 
@@ -108,8 +105,8 @@ class Config:
         if missing:
             raise RuntimeError(
                 f"Missing required environment variables: {', '.join(missing)}.\n"
-                "MySQL requires: DB_TYPE, DB_DATABASE, DB_PASSWORD\n"
-                "PostgreSQL requires: DB_TYPE, DB_DATABASE, DB_PASSWORD\n"
+                "MySQL requires: DB_TYPE, DB_DATABASE\n"
+                "PostgreSQL requires: DB_TYPE, DB_DATABASE\n"
                 "MongoDB requires: DB_TYPE, DB_DATABASE, DB_URL"
             )
 
