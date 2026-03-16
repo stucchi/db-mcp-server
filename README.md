@@ -1,6 +1,6 @@
 # db-mcp-server
 
-MCP server for MySQL, PostgreSQL, and MongoDB databases. One instance per database, no Docker required.
+MCP server for MySQL, PostgreSQL, MongoDB, and SQLite databases. One instance per database, no Docker required.
 
 ## Installation
 
@@ -45,9 +45,20 @@ Configure via environment variables. Each instance connects to a single database
 | `DB_URL` | Yes | — | Connection URL (`mongodb://...`) |
 | `DB_MODE` | No | `read-only` | `read-only` or `read-write` |
 
+### SQLite
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DB_TYPE` | Yes | — | `sqlite` |
+| `DB_PATH` | Yes | — | Path to `.db` file (local or remote with SSH) |
+| `DB_DATABASE` | No | filename | Display name |
+| `DB_MODE` | No | `read-only` | `read-only` or `read-write` |
+
 ### SSH Tunnel (MySQL / PostgreSQL)
 
 Optionally connect through an SSH bastion host. Set `SSH_HOST` to activate.
+
+For **SQLite over SSH**, the remote `.db` file is downloaded via SFTP before querying. In `read-write` mode, changes are uploaded back on shutdown.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -60,6 +71,43 @@ Optionally connect through an SSH bastion host. Set `SSH_HOST` to activate.
 At least one of `SSH_KEY` or `SSH_PASSWORD` is required when `SSH_HOST` is set. SSH tunneling is not supported for MongoDB.
 
 ## Usage in .mcp.json
+
+### SQLite (local)
+
+```json
+{
+  "mcpServers": {
+    "db-local": {
+      "command": "uvx",
+      "args": ["db-mcp-server"],
+      "env": {
+        "DB_TYPE": "sqlite",
+        "DB_PATH": "/path/to/database.db"
+      }
+    }
+  }
+}
+```
+
+### SQLite over SSH
+
+```json
+{
+  "mcpServers": {
+    "db-remote": {
+      "command": "uvx",
+      "args": ["db-mcp-server"],
+      "env": {
+        "DB_TYPE": "sqlite",
+        "DB_PATH": "/remote/path/to/database.db",
+        "SSH_HOST": "server.example.com",
+        "SSH_USER": "deploy",
+        "SSH_KEY": "~/.ssh/id_rsa"
+      }
+    }
+  }
+}
+```
 
 ```json
 {
@@ -145,6 +193,14 @@ For multiple databases, add multiple instances:
 - **execute** — Execute write SQL (INSERT, UPDATE, DELETE) — requires `DB_MODE=read-write`
 - **describe** — Describe table structure (column info from information_schema)
 - **list_tables** — List all tables in the public schema
+- **status** — Show connection info
+
+### SQLite
+
+- **query** — Execute read-only SQL (SELECT, SHOW, DESCRIBE, EXPLAIN, WITH)
+- **execute** — Execute write SQL (INSERT, UPDATE, DELETE) — requires `DB_MODE=read-write`
+- **describe** — Describe table structure (PRAGMA table_info)
+- **list_tables** — List all tables
 - **status** — Show connection info
 
 ### MongoDB

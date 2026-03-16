@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import struct
 import sys
+import tempfile
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
+import aiosqlite
 import paramiko
 import aiomysql
 import asyncpg
@@ -40,6 +43,8 @@ class Connection:
         self._pg_pool: asyncpg.Pool | None = None
         self._mongo_client: motor.motor_asyncio.AsyncIOMotorClient | None = None
         self._mongo_db: Any = None
+        self._sqlite_path: str | None = None
+        self._ssh_client: paramiko.SSHClient | None = None
         self._tunnel: SSHTunnelForwarder | None = None
         # Track connections where multi-statements have been disabled.
         self._safe_conns: set[int] = set()
@@ -91,6 +96,10 @@ class Connection:
         return local_host, local_port
 
     async def connect(self) -> None:
+        if self.config.is_sqlite:
+            await self._connect_sqlite()
+            return
+
         host = self.config.db_host
         port = self.config.db_port
 
@@ -197,6 +206,77 @@ class Connection:
         await self._mongo_db.command("ping")
         print("[db-mcp] MongoDB connected.", file=sys.stderr)
 
+    # ------------------------------------------------------------------
+    # SQLite helpers
+    # ------------------------------------------------------------------
+
+    def _download_sqlite_via_ssh(self) -> str:
+        """Download a remote SQLite file via SFTP and return local temp path."""
+        cfg = self.config
+        print(
+            f"[db-mcp] Downloading SQLite DB via SSH {cfg.ssh_user}@{cfg.ssh_host}:{cfg.ssh_port}"
+            f" -> {cfg.db_path}...",
+            file=sys.stderr,
+        )
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        connect_kwargs: dict[str, Any] = {
+            "hostname": cfg.ssh_host,
+            "port": cfg.ssh_port,
+            "username": cfg.ssh_user,
+        }
+        if cfg.ssh_key:
+            connect_kwargs["key_filename"] = os.path.expanduser(cfg.ssh_key)
+        if cfg.ssh_password:
+            connect_kwargs["password"] = cfg.ssh_password
+        client.connect(**connect_kwargs)
+        self._ssh_client = client
+
+        sftp = client.open_sftp()
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+        sftp.get(cfg.db_path, tmp_path)
+        sftp.close()
+        print(f"[db-mcp] SQLite DB downloaded to {tmp_path}.", file=sys.stderr)
+        return tmp_path
+
+    def _upload_sqlite_via_ssh(self) -> None:
+        """Upload local SQLite file back to the remote server via SFTP."""
+        if not self._ssh_client or not self._sqlite_path:
+            return
+        cfg = self.config
+        print(f"[db-mcp] Uploading SQLite DB back to {cfg.db_path}...", file=sys.stderr)
+        sftp = self._ssh_client.open_sftp()
+        sftp.put(self._sqlite_path, cfg.db_path)
+        sftp.close()
+        print("[db-mcp] SQLite DB uploaded.", file=sys.stderr)
+
+    async def _connect_sqlite(self) -> None:
+        if self.config.has_ssh_tunnel:
+            self._sqlite_path = self._download_sqlite_via_ssh()
+        else:
+            self._sqlite_path = self.config.db_path
+
+        print(
+            f"[db-mcp] Opening SQLite {self._sqlite_path} ({self.config.db_mode})...",
+            file=sys.stderr,
+        )
+        # Verify we can open it
+        async with aiosqlite.connect(self._sqlite_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT 1") as cur:
+                await cur.fetchone()
+        print("[db-mcp] SQLite connected.", file=sys.stderr)
+
+    @asynccontextmanager
+    async def acquire_sqlite(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Acquire an aiosqlite connection."""
+        assert self._sqlite_path is not None, "SQLite path not initialized"
+        async with aiosqlite.connect(self._sqlite_path) as db:
+            db.row_factory = aiosqlite.Row
+            yield db
+
     async def close(self) -> None:
         if self._pool is not None:
             self._pool.close()
@@ -208,6 +288,19 @@ class Connection:
         if self._mongo_client is not None:
             self._mongo_client.close()
             print("[db-mcp] MongoDB disconnected.", file=sys.stderr)
+        if self._sqlite_path and self.config.has_ssh_tunnel:
+            if not self.config.is_read_only:
+                self._upload_sqlite_via_ssh()
+            try:
+                os.unlink(self._sqlite_path)
+            except OSError:
+                pass
+            print("[db-mcp] SQLite disconnected.", file=sys.stderr)
+        elif self._sqlite_path:
+            print("[db-mcp] SQLite disconnected.", file=sys.stderr)
+        if self._ssh_client is not None:
+            self._ssh_client.close()
+            print("[db-mcp] SSH connection closed.", file=sys.stderr)
         if self._tunnel is not None:
             self._tunnel.stop()
             print("[db-mcp] SSH tunnel closed.", file=sys.stderr)

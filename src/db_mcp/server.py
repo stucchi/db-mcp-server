@@ -11,10 +11,14 @@ from db_mcp.config import get_config
 from db_mcp.connection import Connection
 from db_mcp.tools.aggregate import aggregate_mongodb
 from db_mcp.tools.describe import describe_mongodb, describe_mysql, describe_pg
+from db_mcp.tools.describe_sqlite import describe_sqlite
 from db_mcp.tools.execute import execute_mysql, execute_pg
+from db_mcp.tools.execute_sqlite import execute_sqlite
 from db_mcp.tools.list_collections import list_collections as _list_collections
 from db_mcp.tools.list_tables import list_tables as _list_tables, list_tables_pg as _list_tables_pg
+from db_mcp.tools.list_tables_sqlite import list_tables_sqlite as _list_tables_sqlite
 from db_mcp.tools.query import query_mongodb, query_mysql, query_pg
+from db_mcp.tools.query_sqlite import query_sqlite
 from db_mcp.tools.status import get_status
 
 config = get_config()
@@ -62,6 +66,16 @@ elif config.is_postgresql:
         rows = await query_pg(_conn, config, query)
         return _format(rows)
 
+elif config.is_sqlite:
+
+    @mcp.tool()
+    async def query(
+        query: Annotated[str, "SQL SELECT query to execute"],
+    ) -> str:
+        """Execute a read-only query on the SQLite database. Only SELECT, SHOW, DESCRIBE, EXPLAIN, WITH are allowed on read-only databases."""
+        rows = await query_sqlite(_conn, config, query)
+        return _format(rows)
+
 else:
 
     @mcp.tool()
@@ -97,6 +111,16 @@ elif config.is_postgresql:
         result = await execute_pg(_conn, config, query)
         return _format(result)
 
+elif config.is_sqlite:
+
+    @mcp.tool()
+    async def execute(
+        query: Annotated[str, "SQL query to execute (INSERT, UPDATE, DELETE, etc.)"],
+    ) -> str:
+        """Execute a write query on the SQLite database. Only works if the database is configured with mode='read-write'."""
+        result = await execute_sqlite(_conn, config, query)
+        return _format(result)
+
 
 # --- Tool: describe ---
 
@@ -120,6 +144,16 @@ elif config.is_postgresql:
         rows = await describe_pg(_conn, table)
         return _format(rows)
 
+elif config.is_sqlite:
+
+    @mcp.tool()
+    async def describe(
+        table: Annotated[str, "Table name to describe"],
+    ) -> str:
+        """Describe the structure of a SQLite table (PRAGMA table_info)."""
+        rows = await describe_sqlite(_conn, table)
+        return _format(rows)
+
 else:
 
     @mcp.tool()
@@ -131,7 +165,7 @@ else:
         return _format(rows)
 
 
-# --- Tool: list_tables (MySQL / PostgreSQL) ---
+# --- Tool: list_tables (MySQL / PostgreSQL / SQLite) ---
 
 if config.is_mysql:
 
@@ -147,6 +181,14 @@ elif config.is_postgresql:
     async def list_tables() -> str:
         """List all tables in the PostgreSQL database (public schema)."""
         rows = await _list_tables_pg(_conn)
+        return _format(rows)
+
+elif config.is_sqlite:
+
+    @mcp.tool()
+    async def list_tables() -> str:
+        """List all tables in the SQLite database."""
+        rows = await _list_tables_sqlite(_conn)
         return _format(rows)
 
 

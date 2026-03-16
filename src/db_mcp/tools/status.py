@@ -13,6 +13,8 @@ def get_status(config: Config) -> dict:
     if config.is_mysql or config.is_postgresql:
         info["host"] = f"{config.db_host}:{config.db_port}"
         info["user"] = config.db_user
+    elif config.is_sqlite:
+        info["path"] = config.db_path
     else:
         info["url"] = config.db_url
     if config.has_ssh_tunnel:

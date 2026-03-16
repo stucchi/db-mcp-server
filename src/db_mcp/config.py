@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    db_type: str  # "mysql", "postgresql", or "mongodb"
+    db_type: str  # "mysql", "postgresql", "mongodb", or "sqlite"
     db_mode: str  # "read-only" or "read-write"
     db_database: str
 
@@ -20,7 +20,10 @@ class Config:
     # MongoDB
     db_url: str
 
-    # SSH tunnel (MySQL / PostgreSQL only)
+    # SQLite
+    db_path: str  # local or remote file path
+
+    # SSH tunnel (MySQL / PostgreSQL / SQLite)
     ssh_host: str
     ssh_port: int
     ssh_user: str
@@ -40,6 +43,10 @@ class Config:
         return self.db_type == "mongodb"
 
     @property
+    def is_sqlite(self) -> bool:
+        return self.db_type == "sqlite"
+
+    @property
     def is_read_only(self) -> bool:
         return self.db_mode == "read-only"
 
@@ -55,13 +62,13 @@ class Config:
 
         missing: list[str] = []
 
-        if db_type not in ("mysql", "postgresql", "mongodb"):
+        if db_type not in ("mysql", "postgresql", "mongodb", "sqlite"):
             raise RuntimeError(
-                "DB_TYPE must be 'mysql', 'postgresql', or 'mongodb'.\n"
+                "DB_TYPE must be 'mysql', 'postgresql', 'mongodb', or 'sqlite'.\n"
                 "Set DB_TYPE in your environment variables."
             )
 
-        if not db_database:
+        if not db_database and db_type != "sqlite":
             missing.append("DB_DATABASE")
 
         if db_mode not in ("read-only", "read-write"):
@@ -81,6 +88,11 @@ class Config:
 
         if db_type == "mongodb" and not db_url:
             missing.append("DB_URL")
+
+        # SQLite
+        db_path = os.environ.get("DB_PATH", "")
+        if db_type == "sqlite" and not db_path:
+            missing.append("DB_PATH")
 
         # SSH tunnel vars
         ssh_host = os.environ.get("SSH_HOST", "")
@@ -107,8 +119,13 @@ class Config:
                 f"Missing required environment variables: {', '.join(missing)}.\n"
                 "MySQL requires: DB_TYPE, DB_DATABASE\n"
                 "PostgreSQL requires: DB_TYPE, DB_DATABASE\n"
-                "MongoDB requires: DB_TYPE, DB_DATABASE, DB_URL"
+                "MongoDB requires: DB_TYPE, DB_DATABASE, DB_URL\n"
+                "SQLite requires: DB_TYPE, DB_PATH"
             )
+
+        # For SQLite, use filename as db_database if not set
+        if db_type == "sqlite" and not db_database:
+            db_database = os.path.basename(db_path)
 
         return Config(
             db_type=db_type,
@@ -119,6 +136,7 @@ class Config:
             db_user=db_user,
             db_password=db_password,
             db_url=db_url,
+            db_path=db_path,
             ssh_host=ssh_host,
             ssh_port=ssh_port,
             ssh_user=ssh_user,
