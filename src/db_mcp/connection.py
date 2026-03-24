@@ -36,6 +36,10 @@ from db_mcp.config import Config
 _MULTI_STATEMENTS_OFF = struct.pack("<H", 1)
 
 
+class _PgReconnectNeeded(Exception):
+    """Internal sentinel: raised when a PG pool ping fails inside acquire_pg."""
+
+
 class Connection:
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -168,9 +172,37 @@ class Connection:
 
     @asynccontextmanager
     async def acquire_pg(self) -> AsyncIterator[asyncpg.Connection]:
-        """Acquire a PostgreSQL connection from the pool."""
-        async with self.pg_pool.acquire() as conn:
-            yield conn
+        """Acquire a PostgreSQL connection from the pool.
+
+        Automatically reconnects (including SSH tunnel) if the connection
+        has gone stale (e.g. "Connection reset by peer" after idle timeout).
+        """
+        try:
+            async with self.pg_pool.acquire() as conn:
+                # Ping to detect stale connections before handing off.
+                try:
+                    await conn.fetchval("SELECT 1")
+                except (
+                    asyncpg.ConnectionDoesNotExistError,
+                    asyncpg.InterfaceError,
+                    OSError,
+                ):
+                    # Connection is dead — will reconnect below.
+                    raise _PgReconnectNeeded()
+                yield conn
+        except (
+            asyncpg.ConnectionDoesNotExistError,
+            asyncpg.InterfaceError,
+            OSError,
+            _PgReconnectNeeded,
+        ):
+            print(
+                "[db-mcp] PostgreSQL connection lost, reconnecting...",
+                file=sys.stderr,
+            )
+            await self._reconnect_pg()
+            async with self.pg_pool.acquire() as conn:
+                yield conn
 
     async def _connect_postgresql(self, host: str, port: int) -> None:
         print(
@@ -189,6 +221,32 @@ class Connection:
         async with self.acquire_pg() as conn:
             await conn.fetchval("SELECT 1")
         print("[db-mcp] PostgreSQL connected.", file=sys.stderr)
+
+    async def _reconnect_pg(self) -> None:
+        """Tear down the existing PG pool (and SSH tunnel) and create new ones."""
+        # Close the old pool gracefully.
+        if self._pg_pool is not None:
+            try:
+                await self._pg_pool.close()
+            except Exception:
+                pass
+            self._pg_pool = None
+
+        # If we were using an SSH tunnel, restart it too — the tunnel
+        # socket may also be dead.
+        if self.config.has_ssh_tunnel:
+            if self._tunnel is not None:
+                try:
+                    self._tunnel.stop()
+                except Exception:
+                    pass
+                self._tunnel = None
+            host, port = self._start_tunnel()
+        else:
+            host = self.config.db_host
+            port = self.config.db_port
+
+        await self._connect_postgresql(host, port)
 
     # ------------------------------------------------------------------
     # MongoDB helpers
