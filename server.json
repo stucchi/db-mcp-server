@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.stucchi/db",
   "title": "DB MCP Server",
-  "description": "Database MCP server for MySQL, PostgreSQL, and MongoDB with SSH tunneling support.",
+  "description": "Database MCP server for MySQL, PostgreSQL, MongoDB, and SQLite with SSH tunneling support.",
   "repository": {
     "url": "https://github.com/stucchi/db-mcp-server",
     "source": "github"
   },
-  "version": "1.1.3",
+  "version": "1.2.1",
   "icons": [
     {
       "src": "https://raw.githubusercontent.com/stucchi/db-mcp-server/master/assets/icon.png",
@@ -19,7 +19,7 @@
     {
       "registryType": "pypi",
       "identifier": "db-mcp-server",
-      "version": "1.1.3",
+      "version": "1.2.1",
       "transport": {
         "type": "stdio"
       },
@@ -28,7 +28,7 @@
           "name": "DB_TYPE",
           "description": "Database type",
           "isRequired": true,
-          "choices": ["mysql", "postgresql", "mongodb"]
+          "choices": ["mysql", "postgresql", "mongodb", "sqlite"]
         },
         {
           "name": "DB_DATABASE",
